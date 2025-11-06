@@ -32,12 +32,10 @@ pio.templates.default = "plotly_dark"
 # -----------------------------
 # Funciones auxiliares (cacheadas)
 # -----------------------------
-@st.cache_data(show_spinner=False)
 def make_time_index(periods: int = 192, freq: str = "30min") -> pd.DatetimeIndex:
     end = pd.Timestamp.now().floor(freq)
     return pd.date_range(end=end, periods=periods, freq=freq)
 
-@st.cache_data(show_spinner=False)
 def simulate_base_signals(periods: int = 192, freq: str = "30min") -> pd.DataFrame:
     """Simula señales base SIN recibir objetos no-hasheables (evita UnhashableParamError).
     Genera internamente el DatetimeIndex a partir de parámetros simples (hashables).
