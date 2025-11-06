@@ -193,7 +193,7 @@ fig.add_trace(go.Scatter(name="Humedad_out (%)", x=T["timestamp"].iloc[:cur+1], 
 # Fila 2 — composición (barras apiladas 0..100%)
 fig.add_trace(go.Bar(name="% UGM_A", x=T["timestamp"].iloc[:cur+1], y=T["%UGM_A"].iloc[:cur+1], marker_color="#9B59B6"), row=2, col=1)
 fig.add_trace(go.Bar(name="% UGM_B", x=T["timestamp"].iloc[:cur+1], y=T["%UGM_B"].iloc[:cur+1], marker_color="#E91E63"), row=2, col=1)
-fig.update_layout(barmode="stack", row=2, col=1)
+fig.update_layout(barmode="stack")
 
 # Fila 3 — propiedades
 fig.add_trace(go.Scatter(name="P80 (µm)", x=T["timestamp"].iloc[:cur+1], y=T["P80"].iloc[:cur+1],
@@ -210,6 +210,7 @@ fig.add_trace(go.Scatter(name="Hum_in (%)", x=T["timestamp"].iloc[:cur+1], y=T["
 
 fig.update_layout(
     height=880,
+    hovermode="x unified",
     title_text="T1 — Setpoints (kg/t), Humedad (%) y Composición/Propiedades",
     margin=dict(l=40, r=20, t=50, b=30),
     legend=dict(orientation="h", yanchor="bottom", y=1.03, xanchor="right", x=1.0, font=dict(size=11), itemwidth=40),
