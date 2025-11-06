@@ -38,7 +38,11 @@ def make_time_index(periods: int = 192, freq: str = "30min") -> pd.DatetimeIndex
     return pd.date_range(end=end, periods=periods, freq=freq)
 
 @st.cache_data(show_spinner=False)
-def simulate_base_signals(idx: pd.DatetimeIndex) -> pd.DataFrame:
+def simulate_base_signals(periods: int = 192, freq: str = "30min") -> pd.DataFrame:
+    """Simula señales base SIN recibir objetos no-hasheables (evita UnhashableParamError).
+    Genera internamente el DatetimeIndex a partir de parámetros simples (hashables).
+    """
+    idx = make_time_index(periods=periods, freq=freq)
     np.random.seed(23)
     origins = ["RajoA", "RajoB", "Stock1", "Stock2"]
     drums = ["T1", "T2"]
@@ -78,7 +82,6 @@ def simulate_base_signals(idx: pd.DatetimeIndex) -> pd.DataFrame:
         data.append(df_o.reset_index().rename(columns={"index": "timestamp"}))
     props = pd.concat(data, ignore_index=True)
 
-    # Flujos (t/h) tipo OU
     def ou_series(mu, sigma, theta=0.25, x0=None):
         x = np.zeros(len(idx))
         x[0] = mu if x0 is None else x0
@@ -88,7 +91,6 @@ def simulate_base_signals(idx: pd.DatetimeIndex) -> pd.DataFrame:
 
     tph_T1, tph_T2 = ou_series(800, 25), ou_series(780, 30, x0=760)
 
-    # Mezcla suave por tambor
     def smooth_dirichlet(k=4, scale=40):
         raw = pd.DataFrame(np.random.dirichlet(np.ones(k), len(idx))).rolling(scale, min_periods=1).mean().values
         return raw / raw.sum(axis=1, keepdims=True)
@@ -165,7 +167,8 @@ st.markdown(
 )
 
 idx = make_time_index()
-df_base = simulate_base_signals(idx)
+# Llamar a la simulación sin pasar objetos no-hasheables
+df_base = simulate_base_signals(periods=len(idx), freq="30min")
 
 st.sidebar.header("Parámetros globales")
 hum_target = st.sidebar.slider("Humedad objetivo (%)", 6.0, 12.0, 8.5, 0.1)
