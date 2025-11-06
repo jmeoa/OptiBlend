@@ -17,14 +17,18 @@ from plotly.subplots import make_subplots
 import plotly.io as pio
 
 st.set_page_config(page_title="OptiBlend — Mini Animación", layout="wide", page_icon="⚙️")
-pio.templates.default = "plotly_white"
+pio.templates.default = "simple_white"
 
-# Forzar fondo blanco en toda la app
-st.markdown("""
-    <style>
-      .stApp, .block-container { background: #FFFFFF !important; }
-    </style>
-""", unsafe_allow_html=True)
+# Header claro ISA‑101 (alto contraste, sin decoraciones innecesarias)
+st.markdown(
+    """
+    <div style='background:#FFFFFF; padding:10px 12px; border-bottom:1px solid #E6E6E6;'>
+      <div style='font-size:22px; font-weight:600; color:#111;'>OptiBlend® — Mini Animación</div>
+      <div style='font-size:13px; color:#444;'>UGM_A requiere más ácido que UGM_B • Observe impacto en setpoints (kg/t) y humedad</div>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 
 # Paleta breve (Accenture-inspired)
 C = {"bg":"#1C1C1C","panel":"#2E2E2E","magenta":"#A100FF","blue":"#0072CE","green":"#82FF70","silver":"#E0E0E0"}
@@ -146,7 +150,8 @@ if k("playing") not in st.session_state:
     st.session_state[k("playing")] = False
 
 # Controles de reproducción
-btn_l, btn_m, btn_r = st.columns([0.15, 0.15, 0.70])
+# Barra de control (alineada a la izquierda, compacta)
+btn_l, btn_m, btn_r = st.columns([0.12, 0.12, 0.76])
 with btn_l:
     if st.button("▶ Play", key=k("play")):
         st.session_state[k("playing")] = True
@@ -164,11 +169,15 @@ cur = st.session_state[k("i")]
 #  Fila 2 → composición UGM_A/UGM_B (área apilada 0..100%)
 #  Fila 3 → propiedades mezcladas: P80 (µm, eje izq) + leyes/prop (%: CuT, CuS, CaCO3, Hum_in) en eje der
 # --------------------------------------------------------------
-fig = make_subplots(rows=3, cols=1, shared_xaxes=True,
-                    specs=[[{"secondary_y": True}],
-                           [{"secondary_y": False}],
-                           [{"secondary_y": True}]],
-                    vertical_spacing=0.10)
+fig = make_subplots(
+    rows=3,
+    cols=1,
+    shared_xaxes=True,
+    specs=[[{"secondary_y": True}],
+           [{"secondary_y": False}],
+           [{"secondary_y": True}]],
+    vertical_spacing=0.08
+)
 
 # Fila 1 — setpoints + humedad
 fig.add_trace(go.Scatter(name="Ácido (kg/t)", x=T["timestamp"].iloc[:cur+1], y=T["Acid_kgpt"].iloc[:cur+1],
@@ -181,10 +190,10 @@ fig.add_trace(go.Scatter(name="Humedad_out (%)", x=T["timestamp"].iloc[:cur+1], 
                          mode="lines", line=dict(color=C["silver"], width=2, dash="dot")), row=1, col=1, secondary_y=True)
 
 # Fila 2 — composición (área apilada)
-fig.add_trace(go.Scatter(name="% UGM_A", x=T["timestamp"].iloc[:cur+1], y=T["%UGM_A"].iloc[:cur+1], mode="lines",
-                         line=dict(color="#9B59B6", width=0), fill="tozeroy", stackgroup="mix"), row=2, col=1)
-fig.add_trace(go.Scatter(name="% UGM_B", x=T["timestamp"].iloc[:cur+1], y=T["%UGM_B"].iloc[:cur+1], mode="lines",
-                         line=dict(color="#E91E63", width=0), fill="tonexty", stackgroup="mix"), row=2, col=1)
+# Fila 2 — composición (barras apiladas 0..100%)
+fig.add_trace(go.Bar(name="% UGM_A", x=T["timestamp"].iloc[:cur+1], y=T["%UGM_A"].iloc[:cur+1], marker_color="#9B59B6"), row=2, col=1)
+fig.add_trace(go.Bar(name="% UGM_B", x=T["timestamp"].iloc[:cur+1], y=T["%UGM_B"].iloc[:cur+1], marker_color="#E91E63"), row=2, col=1)
+fig.update_layout(barmode="stack", row=2, col=1)
 
 # Fila 3 — propiedades
 fig.add_trace(go.Scatter(name="P80 (µm)", x=T["timestamp"].iloc[:cur+1], y=T["P80"].iloc[:cur+1],
@@ -200,16 +209,27 @@ fig.add_trace(go.Scatter(name="Hum_in (%)", x=T["timestamp"].iloc[:cur+1], y=T["
                          mode="lines", line=dict(width=1)), row=3, col=1, secondary_y=True)
 
 fig.update_layout(
-    height=900,
-    paper_bgcolor="#FFFFFF", plot_bgcolor="#FFFFFF",
+    height=880,
     title_text="T1 — Setpoints (kg/t), Humedad (%) y Composición/Propiedades",
-    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1.0),
+    margin=dict(l=40, r=20, t=50, b=30),
+    legend=dict(orientation="h", yanchor="bottom", y=1.03, xanchor="right", x=1.0, font=dict(size=11), itemwidth=40),
 )
+# Rejillas suaves y etiquetas legibles (ISA‑101)
+for r in (1,2,3):
+    fig.update_xaxes(showgrid=True, gridcolor="#EAEAEA", zeroline=False, row=r, col=1)
+    fig.update_yaxes(showgrid=True, gridcolor="#EAEAEA", zeroline=False, row=r, col=1)
 fig.update_yaxes(title_text="kg/t", secondary_y=False, row=1, col=1)
 fig.update_yaxes(title_text="%", secondary_y=True, row=1, col=1)
 fig.update_yaxes(title_text="Composición UGM (%)", row=2, col=1, range=[0,100])
 fig.update_yaxes(title_text="P80 (µm)", secondary_y=False, row=3, col=1)
 fig.update_yaxes(title_text="Leyes / Propiedades (%)", secondary_y=True, row=3, col=1)
+
+# Marcadores del último punto (mejor visibilidad ISA‑101)
+lastx = T["timestamp"].iloc[cur]
+fig.add_trace(go.Scatter(x=[lastx], y=[T["Acid_kgpt"].iloc[cur]], mode="markers", marker=dict(size=9, color="#A100FF"), name="•"), row=1, col=1, secondary_y=False)
+fig.add_trace(go.Scatter(x=[lastx], y=[T["Refino_kgpt"].iloc[cur]], mode="markers", marker=dict(size=9, color="#0072CE"), name="•"), row=1, col=1, secondary_y=False)
+fig.add_trace(go.Scatter(x=[lastx], y=[T["Agua_kgpt"].iloc[cur]], mode="markers", marker=dict(size=9, color="#2ECC71"), name="•"), row=1, col=1, secondary_y=False)
+fig.add_trace(go.Scatter(x=[lastx], y=[T["Hum_out_pct"].iloc[cur]], mode="markers", marker=dict(size=9, color="#333333"), name="•"), row=1, col=1, secondary_y=True)
 
 st.plotly_chart(fig, use_container_width=True, key=k("plot"))
 
