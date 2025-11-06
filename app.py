@@ -1,11 +1,12 @@
-# OptiBlend — Primera pestaña (Timeline de setpoints y humedad)
-# Streamlit + Plotly — versión liviana para Streamlit Cloud
+# OptiBlend — Primera pestaña (Timeline limpio, sin caché)
+# Streamlit + Plotly — listo para Streamlit Cloud
 # --------------------------------------------------------------
-# - Historia: 2 días, paso 30 min (192 puntos)
+# - Historia: 2 días, paso 30 min
 # - Dos tambores (T1, T2)
 # - Dosificación en kg/t: Ácido, Refino, Agua
 # - Humedad resultante (%) en eje secundario
-# - Controles globales + bias por origen
+# - SIN uso de @st.cache_* para evitar errores de hashing
+# - Botón para limpiar caché global de Streamlit Cloud
 # --------------------------------------------------------------
 
 import streamlit as st
@@ -29,22 +30,25 @@ COLORS = {
 }
 pio.templates.default = "plotly_dark"
 
-# -----------------------------
-# Funciones auxiliares (cacheadas)
-# -----------------------------
+# --------------------------------------------------------------
+# Utilidades (SIN cache)
+# --------------------------------------------------------------
+
 def make_time_index(periods: int = 192, freq: str = "30min") -> pd.DatetimeIndex:
+    periods = int(max(1, periods))
     end = pd.Timestamp.now().floor(freq)
     return pd.date_range(end=end, periods=periods, freq=freq)
 
+
 def simulate_base_signals(periods: int = 192, freq: str = "30min") -> pd.DataFrame:
-    """Simula señales base SIN recibir objetos no-hasheables (evita UnhashableParamError).
-    Genera internamente el DatetimeIndex a partir de parámetros simples (hashables).
-    """
+    """Simula señales base. No usa decoradores de cache ni recibe objetos no hasheables."""
     idx = make_time_index(periods=periods, freq=freq)
     np.random.seed(23)
+
     origins = ["RajoA", "RajoB", "Stock1", "Stock2"]
     drums = ["T1", "T2"]
 
+    # Cluster discreto por origen
     cluster_states = ["UGM_A", "UGM_B", "UGM_C"]
     cluster_map = {}
     for o in origins:
@@ -55,13 +59,15 @@ def simulate_base_signals(periods: int = 192, freq: str = "30min") -> pd.DataFra
             run.append(cluster_states[k])
         cluster_map[o] = run
 
+    # Medias por cluster (valores razonables)
     means = {
         "UGM_A": {"CuT": 0.55, "CuS": 0.25, "CaCO3": 2.0, "P80": 8000, "Hum_in": 6.5},
         "UGM_B": {"CuT": 0.35, "CuS": 0.10, "CaCO3": 5.0, "P80": 12000, "Hum_in": 8.0},
         "UGM_C": {"CuT": 0.85, "CuS": 0.45, "CaCO3": 1.0, "P80": 6000, "Hum_in": 5.0},
     }
 
-    data = []
+    # Series de propiedades por origen
+    frames = []
     for o in origins:
         clusters = np.array(cluster_map[o])
         noise = {
@@ -75,11 +81,11 @@ def simulate_base_signals(periods: int = 192, freq: str = "30min") -> pd.DataFra
         for v in ["CuT", "CuS", "CaCO3", "P80", "Hum_in"]:
             base = np.array([means[c][v] for c in clusters], dtype=float)
             df_o[v] = np.clip(base + noise[v], a_min=0, a_max=None)
-        df_o["origin"] = o
-        df_o["cluster"] = clusters
-        data.append(df_o.reset_index().rename(columns={"index": "timestamp"}))
-    props = pd.concat(data, ignore_index=True)
+        df_o["origin"], df_o["cluster"] = o, clusters
+        frames.append(df_o.reset_index().rename(columns={"index": "timestamp"}))
+    props = pd.concat(frames, ignore_index=True)
 
+    # Flujos (t/h) estilo OU por tambor
     def ou_series(mu, sigma, theta=0.25, x0=None):
         x = np.zeros(len(idx))
         x[0] = mu if x0 is None else x0
@@ -89,13 +95,15 @@ def simulate_base_signals(periods: int = 192, freq: str = "30min") -> pd.DataFra
 
     tph_T1, tph_T2 = ou_series(800, 25), ou_series(780, 30, x0=760)
 
+    # Mezcla suave por tambor (proporciones de origen)
     def smooth_dirichlet(k=4, scale=40):
         raw = pd.DataFrame(np.random.dirichlet(np.ones(k), len(idx))).rolling(scale, min_periods=1).mean().values
-        return raw / raw.sum(axis=1, keepdims=True)
+        raw = raw / raw.sum(axis=1, keepdims=True)
+        return raw
 
     mix_T1, mix_T2 = smooth_dirichlet(), smooth_dirichlet()
-    origin_list, drum_list = ["RajoA","RajoB","Stock1","Stock2"], ["T1","T2"]
 
+    origin_list, drum_list = origins, drums
     blends = []
     for d, tph, M in zip(drum_list, [tph_T1, tph_T2], [mix_T1, mix_T2]):
         df = pd.DataFrame({
@@ -122,6 +130,7 @@ def weighted_feed(df: pd.DataFrame) -> pd.DataFrame:
     return agg
 
 # Modelos de dosificación (kg/t)
+
 def dosing_models(feed: pd.DataFrame, hum_target: float, rho_refino: float) -> pd.DataFrame:
     f = feed.copy()
     acid = (2.0 + 1.4*f["CaCO3"] + 0.8*f["CuS"] + 0.00006*f["P80"] + 0.05*f["Hum_in"] + 0.18*f["CaCO3"]*f["CuS"]).clip(0, 30)
@@ -151,9 +160,10 @@ def humidity_out(df: pd.DataFrame, k_evap: float) -> pd.Series:
     mw_out = df["mw_in_t"] + df["mw_ref_t"] + df["mw_agua_t"] - m_loss
     return (100.0 * mw_out / (df["ms"] + mw_out)).clip(0, 30)
 
-# -----------------------------
-# Encabezado + Controles
-# -----------------------------
+# --------------------------------------------------------------
+# UI
+# --------------------------------------------------------------
+
 st.markdown(
     f"""
     <div style='background:{COLORS['panel']}; padding:10px; border-radius:12px;'>
@@ -164,14 +174,19 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-idx = make_time_index()
-# Llamar a la simulación sin pasar objetos no-hasheables
-df_base = simulate_base_signals(periods=len(idx), freq="30min")
-
+# Sidebar: controles globales + botón para limpiar caché
 st.sidebar.header("Parámetros globales")
 hum_target = st.sidebar.slider("Humedad objetivo (%)", 6.0, 12.0, 8.5, 0.1)
 rho_refino = st.sidebar.slider("Densidad refino (kg/L)", 0.98, 1.10, 1.02, 0.01)
 k_evap = st.sidebar.slider("Pérdidas por evaporación k_evap", 0.00, 0.15, 0.04, 0.01)
+
+if st.sidebar.button("🔄 Limpiar caché de Streamlit"):
+    try:
+        st.cache_data.clear()
+        st.cache_resource.clear()
+        st.success("Caché limpiada. Por favor, recarga la app.")
+    except Exception as e:
+        st.warning(f"No se pudo limpiar caché: {e}")
 
 st.sidebar.markdown("---")
 st.sidebar.subheader("Bias de leyes por origen")
@@ -185,22 +200,24 @@ for o in origins:
         bias[(o, "P80")] = st.slider(f"{o} P80 bias (µm)", -1500, 1500, 0, 50)
         bias[(o, "Hum_in")] = st.slider(f"{o} Hum_in bias (%)", -1.5, 1.5, 0.0, 0.1)
 
+# Simulación base (SIN caché)
+idx = make_time_index(periods=192, freq="30min")
+df_base = simulate_base_signals(periods=len(idx), freq="30min")
+
 # Aplicar bias
 for (o, v), b in bias.items():
-    mask = df_base["origin"] == o
+    mask = (df_base["origin"] == o)
     if v == "P80":
         df_base.loc[mask, v] = np.clip(df_base.loc[mask, v] + b, 2000, None)
     else:
         df_base.loc[mask, v] = np.clip(df_base.loc[mask, v] * (1 + b), 0, None)
 
-# Feed ponderado por tambor → dosificación → humedad out
+# Feed ponderado → dosificación → humedad
 feed = weighted_feed(df_base)
 sets = dosing_models(feed, hum_target=hum_target, rho_refino=rho_refino)
 sets["Hum_out_pct"] = humidity_out(sets, k_evap=k_evap)
 
-# -----------------------------
-# Timeline por tambor (subplots con eje secundario)
-# -----------------------------
+# Timeline por tambor
 st.markdown("### Timeline — Dosificación (kg/t) y Humedad (%)")
 for drum in ["T1", "T2"]:
     df_d = sets[sets["drum"] == drum].copy()
@@ -224,7 +241,7 @@ for drum in ["T1", "T2"]:
                   row=1, col=1, secondary_y=True)
 
     fig.update_layout(
-        height=440,
+        height=460,
         margin=dict(l=40, r=20, t=30, b=20),
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
         paper_bgcolor=COLORS["bg"], plot_bgcolor=COLORS["panel"],
@@ -242,14 +259,15 @@ st.markdown(
     f"</div>",
     unsafe_allow_html=True,
 )
-# OptiBlend — Primera pestaña (Timeline de setpoints y humedad)
-# Streamlit + Plotly — versión liviana para Streamlit Cloud
+# OptiBlend — Primera pestaña (Timeline limpio, sin caché)
+# Streamlit + Plotly — listo para Streamlit Cloud
 # --------------------------------------------------------------
-# - Historia: 2 días, paso 30 min (192 puntos)
+# - Historia: 2 días, paso 30 min
 # - Dos tambores (T1, T2)
 # - Dosificación en kg/t: Ácido, Refino, Agua
 # - Humedad resultante (%) en eje secundario
-# - Controles globales + bias por origen
+# - SIN uso de @st.cache_* para evitar errores de hashing
+# - Botón para limpiar caché global de Streamlit Cloud
 # --------------------------------------------------------------
 
 import streamlit as st
@@ -273,20 +291,25 @@ COLORS = {
 }
 pio.templates.default = "plotly_dark"
 
-# -----------------------------
-# Funciones auxiliares (cacheadas)
-# -----------------------------
-@st.cache_data(show_spinner=False)
+# --------------------------------------------------------------
+# Utilidades (SIN cache)
+# --------------------------------------------------------------
+
 def make_time_index(periods: int = 192, freq: str = "30min") -> pd.DatetimeIndex:
+    periods = int(max(1, periods))
     end = pd.Timestamp.now().floor(freq)
     return pd.date_range(end=end, periods=periods, freq=freq)
 
-@st.cache_data(show_spinner=False)
-def simulate_base_signals(idx: pd.DatetimeIndex) -> pd.DataFrame:
+
+def simulate_base_signals(periods: int = 192, freq: str = "30min") -> pd.DataFrame:
+    """Simula señales base. No usa decoradores de cache ni recibe objetos no hasheables."""
+    idx = make_time_index(periods=periods, freq=freq)
     np.random.seed(23)
+
     origins = ["RajoA", "RajoB", "Stock1", "Stock2"]
     drums = ["T1", "T2"]
 
+    # Cluster discreto por origen
     cluster_states = ["UGM_A", "UGM_B", "UGM_C"]
     cluster_map = {}
     for o in origins:
@@ -297,13 +320,15 @@ def simulate_base_signals(idx: pd.DatetimeIndex) -> pd.DataFrame:
             run.append(cluster_states[k])
         cluster_map[o] = run
 
+    # Medias por cluster (valores razonables)
     means = {
         "UGM_A": {"CuT": 0.55, "CuS": 0.25, "CaCO3": 2.0, "P80": 8000, "Hum_in": 6.5},
         "UGM_B": {"CuT": 0.35, "CuS": 0.10, "CaCO3": 5.0, "P80": 12000, "Hum_in": 8.0},
         "UGM_C": {"CuT": 0.85, "CuS": 0.45, "CaCO3": 1.0, "P80": 6000, "Hum_in": 5.0},
     }
 
-    data = []
+    # Series de propiedades por origen
+    frames = []
     for o in origins:
         clusters = np.array(cluster_map[o])
         noise = {
@@ -317,12 +342,11 @@ def simulate_base_signals(idx: pd.DatetimeIndex) -> pd.DataFrame:
         for v in ["CuT", "CuS", "CaCO3", "P80", "Hum_in"]:
             base = np.array([means[c][v] for c in clusters], dtype=float)
             df_o[v] = np.clip(base + noise[v], a_min=0, a_max=None)
-        df_o["origin"] = o
-        df_o["cluster"] = clusters
-        data.append(df_o.reset_index().rename(columns={"index": "timestamp"}))
-    props = pd.concat(data, ignore_index=True)
+        df_o["origin"], df_o["cluster"] = o, clusters
+        frames.append(df_o.reset_index().rename(columns={"index": "timestamp"}))
+    props = pd.concat(frames, ignore_index=True)
 
-    # Flujos (t/h) tipo OU
+    # Flujos (t/h) estilo OU por tambor
     def ou_series(mu, sigma, theta=0.25, x0=None):
         x = np.zeros(len(idx))
         x[0] = mu if x0 is None else x0
@@ -332,14 +356,15 @@ def simulate_base_signals(idx: pd.DatetimeIndex) -> pd.DataFrame:
 
     tph_T1, tph_T2 = ou_series(800, 25), ou_series(780, 30, x0=760)
 
-    # Mezcla suave por tambor
+    # Mezcla suave por tambor (proporciones de origen)
     def smooth_dirichlet(k=4, scale=40):
         raw = pd.DataFrame(np.random.dirichlet(np.ones(k), len(idx))).rolling(scale, min_periods=1).mean().values
-        return raw / raw.sum(axis=1, keepdims=True)
+        raw = raw / raw.sum(axis=1, keepdims=True)
+        return raw
 
     mix_T1, mix_T2 = smooth_dirichlet(), smooth_dirichlet()
-    origin_list, drum_list = ["RajoA","RajoB","Stock1","Stock2"], ["T1","T2"]
 
+    origin_list, drum_list = origins, drums
     blends = []
     for d, tph, M in zip(drum_list, [tph_T1, tph_T2], [mix_T1, mix_T2]):
         df = pd.DataFrame({
@@ -366,6 +391,7 @@ def weighted_feed(df: pd.DataFrame) -> pd.DataFrame:
     return agg
 
 # Modelos de dosificación (kg/t)
+
 def dosing_models(feed: pd.DataFrame, hum_target: float, rho_refino: float) -> pd.DataFrame:
     f = feed.copy()
     acid = (2.0 + 1.4*f["CaCO3"] + 0.8*f["CuS"] + 0.00006*f["P80"] + 0.05*f["Hum_in"] + 0.18*f["CaCO3"]*f["CuS"]).clip(0, 30)
@@ -395,9 +421,10 @@ def humidity_out(df: pd.DataFrame, k_evap: float) -> pd.Series:
     mw_out = df["mw_in_t"] + df["mw_ref_t"] + df["mw_agua_t"] - m_loss
     return (100.0 * mw_out / (df["ms"] + mw_out)).clip(0, 30)
 
-# -----------------------------
-# Encabezado + Controles
-# -----------------------------
+# --------------------------------------------------------------
+# UI
+# --------------------------------------------------------------
+
 st.markdown(
     f"""
     <div style='background:{COLORS['panel']}; padding:10px; border-radius:12px;'>
@@ -408,13 +435,19 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-idx = make_time_index()
-df_base = simulate_base_signals(periods=len(idx), freq="30min")
-
+# Sidebar: controles globales + botón para limpiar caché
 st.sidebar.header("Parámetros globales")
 hum_target = st.sidebar.slider("Humedad objetivo (%)", 6.0, 12.0, 8.5, 0.1)
 rho_refino = st.sidebar.slider("Densidad refino (kg/L)", 0.98, 1.10, 1.02, 0.01)
 k_evap = st.sidebar.slider("Pérdidas por evaporación k_evap", 0.00, 0.15, 0.04, 0.01)
+
+if st.sidebar.button("🔄 Limpiar caché de Streamlit"):
+    try:
+        st.cache_data.clear()
+        st.cache_resource.clear()
+        st.success("Caché limpiada. Por favor, recarga la app.")
+    except Exception as e:
+        st.warning(f"No se pudo limpiar caché: {e}")
 
 st.sidebar.markdown("---")
 st.sidebar.subheader("Bias de leyes por origen")
@@ -428,22 +461,24 @@ for o in origins:
         bias[(o, "P80")] = st.slider(f"{o} P80 bias (µm)", -1500, 1500, 0, 50)
         bias[(o, "Hum_in")] = st.slider(f"{o} Hum_in bias (%)", -1.5, 1.5, 0.0, 0.1)
 
+# Simulación base (SIN caché)
+idx = make_time_index(periods=192, freq="30min")
+df_base = simulate_base_signals(periods=len(idx), freq="30min")
+
 # Aplicar bias
 for (o, v), b in bias.items():
-    mask = df_base["origin"] == o
+    mask = (df_base["origin"] == o)
     if v == "P80":
         df_base.loc[mask, v] = np.clip(df_base.loc[mask, v] + b, 2000, None)
     else:
         df_base.loc[mask, v] = np.clip(df_base.loc[mask, v] * (1 + b), 0, None)
 
-# Feed ponderado por tambor → dosificación → humedad out
+# Feed ponderado → dosificación → humedad
 feed = weighted_feed(df_base)
 sets = dosing_models(feed, hum_target=hum_target, rho_refino=rho_refino)
 sets["Hum_out_pct"] = humidity_out(sets, k_evap=k_evap)
 
-# -----------------------------
-# Timeline por tambor (subplots con eje secundario)
-# -----------------------------
+# Timeline por tambor
 st.markdown("### Timeline — Dosificación (kg/t) y Humedad (%)")
 for drum in ["T1", "T2"]:
     df_d = sets[sets["drum"] == drum].copy()
@@ -467,7 +502,7 @@ for drum in ["T1", "T2"]:
                   row=1, col=1, secondary_y=True)
 
     fig.update_layout(
-        height=440,
+        height=460,
         margin=dict(l=40, r=20, t=30, b=20),
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
         paper_bgcolor=COLORS["bg"], plot_bgcolor=COLORS["panel"],
