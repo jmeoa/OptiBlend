@@ -17,7 +17,14 @@ from plotly.subplots import make_subplots
 import plotly.io as pio
 
 st.set_page_config(page_title="OptiBlend — Mini Animación", layout="wide", page_icon="⚙️")
-pio.templates.default = "plotly_dark"
+pio.templates.default = "plotly_white"
+
+# Forzar fondo blanco en toda la app
+st.markdown("""
+    <style>
+      .stApp, .block-container { background: #FFFFFF !important; }
+    </style>
+""", unsafe_allow_html=True)
 
 # Paleta breve (Accenture-inspired)
 C = {"bg":"#1C1C1C","panel":"#2E2E2E","magenta":"#A100FF","blue":"#0072CE","green":"#82FF70","silver":"#E0E0E0"}
@@ -30,12 +37,14 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # --- Namespacing para claves únicas por sesión ---
-if 'run_id' not in st.session_state:
-    st.session_state['run_id'] = f"{np.random.randint(0,1_000_000)}"
-RUN = st.session_state['run_id']
+from uuid import uuid4
+# Namespace único por instancia, incluso si coexiste con otras páginas
+if 'app_ns' not in st.session_state:
+    st.session_state['app_ns'] = f"opb_mini_{uuid4().hex[:8]}"
+NS = st.session_state['app_ns']
 
 def k(name: str) -> str:
-    return f"mini_{name}_{RUN}"
+    return f"{NS}:{name}"
 
 # --------------------------------------------------------------
 # Controles
@@ -137,11 +146,11 @@ if k("playing") not in st.session_state:
     st.session_state[k("playing")] = False
 
 # Controles de reproducción
-bcol1, bcol2, bcol3 = st.columns([0.6,0.2,0.2])
-with bcol2:
+btn_l, btn_m, btn_r = st.columns([0.15, 0.15, 0.70])
+with btn_l:
     if st.button("▶ Play", key=k("play")):
         st.session_state[k("playing")] = True
-with bcol3:
+with btn_m:
     if st.button("⏸ Pause", key=k("pause")):
         st.session_state[k("playing")] = False
 
@@ -192,9 +201,9 @@ fig.add_trace(go.Scatter(name="Hum_in (%)", x=T["timestamp"].iloc[:cur+1], y=T["
 
 fig.update_layout(
     height=900,
-    paper_bgcolor=C["bg"], plot_bgcolor=C["panel"],
+    paper_bgcolor="#FFFFFF", plot_bgcolor="#FFFFFF",
     title_text="T1 — Setpoints (kg/t), Humedad (%) y Composición/Propiedades",
-    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
+    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1.0),
 )
 fig.update_yaxes(title_text="kg/t", secondary_y=False, row=1, col=1)
 fig.update_yaxes(title_text="%", secondary_y=True, row=1, col=1)
@@ -374,11 +383,11 @@ if k("playing") not in st.session_state:
     st.session_state[k("playing")] = False
 
 # Controles de reproducción
-bcol1, bcol2, bcol3 = st.columns([0.6,0.2,0.2])
-with bcol2:
+btn_l, btn_m, btn_r = st.columns([0.15, 0.15, 0.70])
+with btn_l:
     if st.button("▶ Play", key=k("play")):
         st.session_state[k("playing")] = True
-with bcol3:
+with btn_m:
     if st.button("⏸ Pause", key=k("pause")):
         st.session_state[k("playing")] = False
 
@@ -413,9 +422,9 @@ fig.add_trace(go.Scatter(name="% UGM_B", x=T["timestamp"].iloc[:cur+1], y=T["%UG
 
 fig.update_layout(
     height=700,
-    paper_bgcolor=C["bg"], plot_bgcolor=C["panel"],
+    paper_bgcolor="#FFFFFF", plot_bgcolor="#FFFFFF",
     title_text="T1 — Setpoints (kg/t), Humedad (%) y Composición UGM",
-    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
+    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1.0),
 )
 fig.update_yaxes(title_text="kg/t", secondary_y=False, row=1, col=1)
 fig.update_yaxes(title_text="%", secondary_y=True, row=1, col=1)
