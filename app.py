@@ -256,7 +256,7 @@ if st.session_state[k("playing")]:
     nxt = (cur + 1) % len(T)
     st.session_state[k("i")] = nxt
     time.sleep(speed_ms / 1000.0)
-    st.experimental_rerun()
+    st.rerun()
 
 # Pie
 st.markdown(
@@ -475,7 +475,7 @@ if st.session_state[k("playing")]:
     nxt = (cur + 1) % len(T)
     st.session_state[k("i")] = nxt
     time.sleep(speed_ms / 1000.0)
-    st.experimental_rerun()
+    st.rerun()
 
 # Pie
 st.markdown(
