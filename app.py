@@ -17,6 +17,14 @@ import plotly.io as pio
 st.set_page_config(page_title="OptiBlend — Mini Animación", layout="wide", page_icon="⚙️")
 pio.templates.default = "plotly_dark"
 
+# --- Evitar claves duplicadas en widgets (namespace de sesión) ---
+if 'run_id' not in st.session_state:
+    st.session_state['run_id'] = f"{np.random.randint(0,1_000_000)}"
+RUN = st.session_state['run_id']
+
+def k(name: str) -> str:
+    return f"mini_{name}_{RUN}"
+
 # Paleta breve (Accenture-inspired)
 C = {"bg":"#1C1C1C","panel":"#2E2E2E","magenta":"#A100FF","blue":"#0072CE","green":"#82FF70","silver":"#E0E0E0"}
 
@@ -32,13 +40,13 @@ st.markdown(f"""
 # -----------------------------
 col1, col2, col3, col4 = st.columns([1,1,1,1])
 with col1:
-    hum_target = st.slider("Humedad objetivo (%)", 6.0, 12.0, 8.5, 0.1, key="hum_target_min")
+    hum_target = st.slider("Humedad objetivo (%)", 6.0, 12.0, 8.5, 0.1, key=k("hum_target"))
 with col2:
-    rho_refino = st.slider("ρ refino (kg/L)", 0.98, 1.10, 1.02, 0.01, key="rho_refino_min")
+    rho_refino = st.slider("ρ refino (kg/L)", 0.98, 1.10, 1.02, 0.01, key=k("rho_refino"))
 with col3:
-    mix_amp = st.slider("Amplitud cambio mezcla", 0.0, 1.0, 0.4, 0.05, key="mix_amp_min")
+    mix_amp = st.slider("Amplitud cambio mezcla", 0.0, 1.0, 0.4, 0.05, key=k("mix_amp"))
 with col4:
-    seed = st.number_input("Seed", 0, 9999, 23, 1, key="seed_min")
+    seed = st.number_input("Seed", 0, 9999, 23, 1, key=k("seed"))
 
 # -----------------------------
 # Simulación ligera (un tambor)
@@ -176,13 +184,13 @@ fig.update_layout(
 fig.update_yaxes(title_text="kg/t", secondary_y=False)
 fig.update_yaxes(title_text="%", secondary_y=True)
 
-st.plotly_chart(fig, use_container_width=True, key="plot_anim_min")
+st.plotly_chart(fig, use_container_width=True, key=k("plot"))
 
 # -----------------------------
 # Panel de KPIs (frame actual)
 # -----------------------------
 st.markdown("### Estado instantáneo (frame actual)")
-frame_idx = st.slider("Frame", 0, len(T)-1, 0, 1, key="frame_kpi")
+frame_idx = st.slider("Frame", 0, len(T)-1, 0, 1, key=k("frame_kpi"))
 row = T.iloc[frame_idx]
 
 k1, k2, k3 = st.columns(3)
