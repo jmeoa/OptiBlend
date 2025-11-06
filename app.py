@@ -250,7 +250,7 @@ for drum in ["T1", "T2"]:
     fig.update_yaxes(title_text="kg/t", secondary_y=False)
     fig.update_yaxes(title_text="%", secondary_y=True)
 
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, use_container_width=True, key=f"plot_{drum}")
 
 # Pie
 st.markdown(
@@ -511,7 +511,7 @@ for drum in ["T1", "T2"]:
     fig.update_yaxes(title_text="kg/t", secondary_y=False)
     fig.update_yaxes(title_text="%", secondary_y=True)
 
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, use_container_width=True, key=f"plot_{drum}")
 
 # Pie
 st.markdown(
