@@ -411,7 +411,7 @@ st.markdown(
 )
 
 idx = make_time_index()
-df_base = simulate_base_signals(idx)
+df_base = simulate_base_signals(periods=len(idx), freq="30min")
 
 st.sidebar.header("Parámetros globales")
 hum_target = st.sidebar.slider("Humedad objetivo (%)", 6.0, 12.0, 8.5, 0.1)
