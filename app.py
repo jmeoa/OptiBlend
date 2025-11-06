@@ -176,11 +176,11 @@ st.markdown(
 
 # Sidebar: controles globales + botón para limpiar caché
 st.sidebar.header("Parámetros globales")
-hum_target = st.sidebar.slider("Humedad objetivo (%)", 6.0, 12.0, 8.5, 0.1)
-rho_refino = st.sidebar.slider("Densidad refino (kg/L)", 0.98, 1.10, 1.02, 0.01)
-k_evap = st.sidebar.slider("Pérdidas por evaporación k_evap", 0.00, 0.15, 0.04, 0.01)
+hum_target = st.sidebar.slider("Humedad objetivo (%)", 6.0, 12.0, 8.5, 0.1, key="hum_target")
+rho_refino = st.sidebar.slider("Densidad refino (kg/L)", 0.98, 1.10, 1.02, 0.01, key="rho_refino")
+k_evap = st.sidebar.slider("Pérdidas por evaporación k_evap", 0.00, 0.15, 0.04, 0.01, key="k_evap")
 
-if st.sidebar.button("🔄 Limpiar caché de Streamlit"):
+if st.sidebar.button("🔄 Limpiar caché de Streamlit", key="clear_cache_btn"):
     try:
         st.cache_data.clear()
         st.cache_resource.clear()
@@ -194,11 +194,11 @@ origins = ["RajoA", "RajoB", "Stock1", "Stock2"]
 bias = {}
 for o in origins:
     with st.sidebar.expander(o):
-        bias[(o, "CuT")] = st.slider(f"{o} CuT bias (%)", -0.2, 0.2, 0.0, 0.01)
-        bias[(o, "CuS")] = st.slider(f"{o} CuS bias (%)", -0.2, 0.2, 0.0, 0.01)
-        bias[(o, "CaCO3")] = st.slider(f"{o} CaCO3 bias (%)", -1.0, 1.0, 0.0, 0.05)
-        bias[(o, "P80")] = st.slider(f"{o} P80 bias (µm)", -1500, 1500, 0, 50)
-        bias[(o, "Hum_in")] = st.slider(f"{o} Hum_in bias (%)", -1.5, 1.5, 0.0, 0.1)
+        bias[(o, "CuT")] = st.slider(f"{o} CuT bias (%)", -0.2, 0.2, 0.0, 0.01, key=f"{o}_CuT_bias")
+        bias[(o, "CuS")] = st.slider(f"{o} CuS bias (%)", -0.2, 0.2, 0.0, 0.01, key=f"{o}_CuS_bias")
+        bias[(o, "CaCO3")] = st.slider(f"{o} CaCO3 bias (%)", -1.0, 1.0, 0.0, 0.05, key=f"{o}_CaCO3_bias")
+        bias[(o, "P80")] = st.slider(f"{o} P80 bias (µm)", -1500, 1500, 0, 50, key=f"{o}_P80_bias")
+        bias[(o, "Hum_in")] = st.slider(f"{o} Hum_in bias (%)", -1.5, 1.5, 0.0, 0.1, key=f"{o}_Hum_bias")
 
 # Simulación base (SIN caché)
 idx = make_time_index(periods=192, freq="30min")
