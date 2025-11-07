@@ -182,50 +182,126 @@ fig = make_subplots(rows=1, cols=5, shared_xaxes=False,
                     specs=[[{"secondary_y": False}, {"secondary_y": False}, {"secondary_y": True}, {"secondary_y": True}, {"secondary_y": True}]],
                     horizontal_spacing=0.04)
 
+# Paleta sobria (ISA‑101 / acentos discretos)
+COL = {
+    "ugm": ["#7E57C2", "#D81B60", "#8E24AA", "#1E88E5", "#43A047"],
+    "tph": ["#455A64", "#9E9E9E", "#607D8B", "#78909C"],
+    "p80": "#F9A825",
+    "f100": "#6D4C41",
+    "tr": "#616161",
+    "acid": "#A100FF",
+    "agua": "#2ECC71",
+    "refino": "#0072CE",
+    "hum": "#2B2B2B",
+}
+
 # (1) Mezcla UGM: líneas apiladas (stackgroup)
 for j in range(int(n_ugm)):
     fig.add_trace(
-        go.Scatter(x=idx[:cur+1], y=100*mix[:cur+1, j], mode="lines", name=f"UGM{j+1}", stackgroup="ugm"),
+        go.Scatter(
+            x=idx[:cur+1], y=100*mix[:cur+1, j], mode="lines",
+            name=f"UGM{j+1}", stackgroup="ugm",
+            line=dict(width=1.6, color=COL["ugm"][j % len(COL["ugm"])])
+        ),
         row=1, col=1
     )
 fig.update_yaxes(title_text="Mezcla UGM (%)", row=1, col=1, autorange=True)
 
 # (2) Tonelaje por tambor (tph)
-for d, series in feeds.items():
-    fig.add_trace(go.Scatter(x=idx[:cur+1], y=series[:cur+1], mode="lines", name=d), row=1, col=2)
+for di, (dname, series) in enumerate(feeds.items()):
+    fig.add_trace(
+        go.Scatter(
+            x=idx[:cur+1], y=series[:cur+1], mode="lines",
+            name=dname, showlegend=False,
+            line=dict(width=1.8, color=COL["tph"][di % len(COL["tph"])])
+        ),
+        row=1, col=2
+    )
 fig.update_yaxes(title_text="tph", row=1, col=2, autorange=True)
 
 # (3) P80 (mm) & Finos -100# (%) con TR (min) en seg eje
-fig.add_trace(go.Scatter(x=idx[:cur+1], y=P80_effmm[:cur+1], name="P80 (mm)", mode="lines"), row=1, col=3, secondary_y=False)
-fig.add_trace(go.Scatter(x=idx[:cur+1], y=Finos_eff[:cur+1], name="-100# (%)", mode="lines"), row=1, col=3, secondary_y=True)
-fig.add_trace(go.Scatter(x=idx[:cur+1], y=TR[:cur+1], name="TR (min)", mode="lines", line=dict(dash="dot")), row=1, col=3, secondary_y=True)
+fig.add_trace(
+    go.Scatter(x=idx[:cur+1], y=P80_effmm[:cur+1], name="P80 (mm)", mode="lines",
+               line=dict(width=2, color=COL["p80"]), showlegend=True),
+    row=1, col=3, secondary_y=False
+)
+fig.add_trace(
+    go.Scatter(x=idx[:cur+1], y=Finos_eff[:cur+1], name="-100# (%)", mode="lines",
+               line=dict(width=1.5, color=COL["f100"]), showlegend=False),
+    row=1, col=3, secondary_y=True
+)
+fig.add_trace(
+    go.Scatter(x=idx[:cur+1], y=TR[:cur+1], name="TR (min)", mode="lines",
+               line=dict(width=1, dash="dot", color=COL["tr"]), showlegend=False),
+    row=1, col=3, secondary_y=True
+)
 fig.update_yaxes(title_text="P80 (mm)", row=1, col=3, secondary_y=False, autorange=True)
 fig.update_yaxes(title_text="% / min", row=1, col=3, secondary_y=True, autorange=True)
 
 # (4) Leyes: CuT, CuS, CaCO3, HumNat (%) — todas a eje derecho; eje izq vacío pero se etiqueta
-fig.add_trace(go.Scatter(x=idx[:cur+1], y=100*CuT_blend[:cur+1], name="CuT %", mode="lines"), row=1, col=4, secondary_y=True)
-fig.add_trace(go.Scatter(x=idx[:cur+1], y=100*CuS_blend[:cur+1], name="CuS %", mode="lines", line=dict(dash="dot")), row=1, col=4, secondary_y=True)
-fig.add_trace(go.Scatter(x=idx[:cur+1], y=CaCO3_blend[:cur+1], name="CaCO3 %", mode="lines", line=dict(dash="dash")), row=1, col=4, secondary_y=True)
-fig.add_trace(go.Scatter(x=idx[:cur+1], y=HumN_blend[:cur+1], name="HumNat %", mode="lines"), row=1, col=4, secondary_y=True)
+fig.add_trace(
+    go.Scatter(x=idx[:cur+1], y=100*CuT_blend[:cur+1], name="CuT %", mode="lines",
+               line=dict(width=1.6, color="#424242"), showlegend=False),
+    row=1, col=4, secondary_y=True
+)
+fig.add_trace(
+    go.Scatter(x=idx[:cur+1], y=100*CuS_blend[:cur+1], name="CuS %", mode="lines",
+               line=dict(width=1.2, dash="dot", color="#7B1FA2"), showlegend=False),
+    row=1, col=4, secondary_y=True
+)
+fig.add_trace(
+    go.Scatter(x=idx[:cur+1], y=CaCO3_blend[:cur+1], name="CaCO3 %", mode="lines",
+               line=dict(width=1.2, dash="dash", color="#1565C0"), showlegend=False),
+    row=1, col=4, secondary_y=True
+)
+fig.add_trace(
+    go.Scatter(x=idx[:cur+1], y=HumN_blend[:cur+1], name="HumNat %", mode="lines",
+               line=dict(width=1.2, color="#00897B"), showlegend=False),
+    row=1, col=4, secondary_y=True
+)
 fig.update_yaxes(title_text="%", row=1, col=4, secondary_y=True, autorange=True)
 fig.update_yaxes(title_text="Leyes", row=1, col=4, secondary_y=False, showgrid=False)
 
 # (5) Dosificación: Ácido, Agua, Refino (kg/t) + Hum_out (%) en eje 2
-fig.add_trace(go.Scatter(x=idx[:cur+1], y=Acid[:cur+1], name="Ácido (kg/t)", mode="lines"), row=1, col=5, secondary_y=False)
-fig.add_trace(go.Scatter(x=idx[:cur+1], y=Agua[:cur+1], name="Agua (kg/t)", mode="lines"), row=1, col=5, secondary_y=False)
-fig.add_trace(go.Scatter(x=idx[:cur+1], y=Refino[:cur+1], name="Refino (kg/t)", mode="lines"), row=1, col=5, secondary_y=False)
-fig.add_trace(go.Scatter(x=idx[:cur+1], y=Hum_out[:cur+1], name="Hum_total %", mode="lines", line=dict(dash="dot")), row=1, col=5, secondary_y=True)
+fig.add_trace(
+    go.Scatter(x=idx[:cur+1], y=Acid[:cur+1], name="Ácido (kg/t)", mode="lines",
+               line=dict(width=2, color=COL["acid"])),
+    row=1, col=5, secondary_y=False
+)
+fig.add_trace(
+    go.Scatter(x=idx[:cur+1], y=Agua[:cur+1], name="Agua (kg/t)", mode="lines",
+               line=dict(width=1.8, color=COL["agua"])),
+    row=1, col=5, secondary_y=False
+)
+fig.add_trace(
+    go.Scatter(x=idx[:cur+1], y=Refino[:cur+1], name="Refino (kg/t)", mode="lines",
+               line=dict(width=1.8, color=COL["refino"])),
+    row=1, col=5, secondary_y=False
+)
+fig.add_trace(
+    go.Scatter(x=idx[:cur+1], y=Hum_out[:cur+1], name="Hum_total %", mode="lines",
+               line=dict(width=1.6, dash="dot", color=COL["hum"])),
+    row=1, col=5, secondary_y=True
+)
 fig.update_yaxes(title_text="kg/t", row=1, col=5, secondary_y=False, autorange=True)
 fig.update_yaxes(title_text="%", row=1, col=5, secondary_y=True, autorange=True)
 
-# Layout general
+# Layout general (fondo blanco + leyenda compacta)
 fig.update_layout(
     height=520,
     hovermode="x unified",
-    legend=dict(orientation="h", y=1.15, x=1.0, xanchor="right", font=dict(size=11)),
-    margin=dict(l=30, r=10, t=40, b=20),
+    paper_bgcolor="#FFFFFF",
+    plot_bgcolor="#FFFFFF",
+    font=dict(color="#111"),
+    legend=dict(orientation="h", y=1.18, x=1.0, xanchor="right", font=dict(size=10)),
+    margin=dict(l=30, r=10, t=50, b=20),
     title_text="(1) Mezcla • (2) TPH • (3) P80 / -100# / TR • (4) Leyes • (5) Dosificación / Hum_total",
 )
+
+# Rejillas suaves (ISA‑101)
+for c in range(1, 6):
+    fig.update_xaxes(showgrid=True, gridcolor="#EAEAEA", zeroline=False, row=1, col=c)
+    fig.update_yaxes(showgrid=True, gridcolor="#EAEAEA", zeroline=False, row=1, col=c)
 
 st.plotly_chart(fig, use_container_width=True, key=key("plot"))
 
