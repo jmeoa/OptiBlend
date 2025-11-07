@@ -1,12 +1,11 @@
-# OptiBlend — 1×5 Animado (ISA-101) — AUTOPLAY ROBUSTO
-# - Autoplay con toggle y st.experimental_rerun fiable
-# - Fondo gris (app + plotly)
+# OptiBlend — 1×5 Animado (ISA-101) — Autoplay estable
+# - Autoplay con st.autorefresh (sin time.sleep)
+# - Play/Pause real; el slider de Frame se deshabilita en Play
+# - Fondo gris, paleta sobria, títulos por subplot, ejes ISA-101
 # - Logo desde repo: assets/accenture.png
-# - Subplot 1×5 con títulos propios, leyendas visibles y ejes profesionales
 # - KPIs sincronizados y ecuación en LaTeX
 
 import os
-import time
 from uuid import uuid4
 import numpy as np
 import pandas as pd
@@ -16,7 +15,7 @@ from plotly.subplots import make_subplots
 import plotly.io as pio
 
 # ------------------------------
-# Setup visual ISA-101
+# Setup visual (ISA-101)
 # ------------------------------
 st.set_page_config(page_title="OptiBlend — 1×5 Animado (ISA-101)", layout="wide", page_icon="⚙️")
 pio.templates.default = "simple_white"
@@ -34,14 +33,14 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Namespace para evitar claves duplicadas
+# Namespace para keys estables
 if "app_ns" not in st.session_state:
     st.session_state["app_ns"] = f"opb_{uuid4().hex[:8]}"
 NS = st.session_state["app_ns"]
 k  = lambda name: f"{NS}:{name}"
 
 # ------------------------------
-# Header con logo + título
+# Header (logo + título)
 # ------------------------------
 c1, c2 = st.columns([0.14, 0.86])
 with c1:
@@ -66,7 +65,7 @@ with c2:
 # ------------------------------
 st.sidebar.header("Controles")
 
-# Polinomio (LaTeX general)
+# Polinomio ácido (LaTeX general)
 st.sidebar.markdown("**Polinomio Ácido (kg/t):**")
 st.sidebar.latex(
     r"""
@@ -77,7 +76,7 @@ st.sidebar.latex(
     """
 )
 
-# Coeficientes polinomio (calibrados para 5–40 kg/t)
+# Coeficientes (calibrados para 5–40 kg/t típico)
 a0 = st.sidebar.slider("a0", 0.0, 10.0, 5.0, 0.1, key=k("a0"))
 a1 = st.sidebar.slider("a1 (× CaCO3)", 0.0, 3.0, 1.2, 0.1, key=k("a1"))
 a2 = st.sidebar.slider("a2 (× CuS)", 0.0, 5.0, 2.0, 0.1, key=k("a2"))
@@ -90,27 +89,58 @@ n_drum  = st.sidebar.number_input("Nº Tambores", min_value=1, max_value=4, valu
 n_ugm   = st.sidebar.number_input("Nº UGM", min_value=2, max_value=5, value=3, step=1, key=k("nugm"))
 hum_obj = st.sidebar.slider("Humedad producto objetivo (%)", 5.0, 15.0, 10.0, 0.1, key=k("humobj"))
 
-# Animación
+# Velocidad y autoplay
 speed_ms = st.sidebar.slider("Velocidad (ms/frame)", 50, 1000, 200, 10, key=k("speed"))
-autoplay = st.sidebar.toggle("Autoplay", value=False, key=k("autoplay"))
-seed = st.sidebar.number_input("Seed", 0, 9999, 42, 1, key=k("seed"))
+# Botón Play/Pause (un solo control)
+if k("playing") not in st.session_state:
+    st.session_state[k("playing")] = False
+play_label = "⏵ Play" if not st.session_state[k("playing")] else "⏸ Pause"
+if st.sidebar.button(play_label, key=k("pp_btn")):
+    st.session_state[k("playing")] = not st.session_state[k("playing")]
 
 # ------------------------------
-# Simulación base
+# Estado de frame + autorefresh
 # ------------------------------
-np.random.seed(int(seed))
-periods = 96  # 2 días @ 30 min
+periods = 96  # 2 días @ 30 minutos
+if k("cur") not in st.session_state:
+    st.session_state[k("cur")] = 0
+
+# Si está en Play, refrescamos automáticamente y avanzamos el frame
+if st.session_state[k("playing")]:
+    # dispara un refresh cada speed_ms
+    st.autorefresh(interval=st.session_state[k("speed")], key=k("tick"))
+    # incrementa frame en cada render
+    st.session_state[k("cur")] = (st.session_state[k("cur")] + 1) % periods
+
+# Slider de frame (deshabilitado en Play para no pisar el estado)
+cur = st.slider(
+    "Frame",
+    0, periods - 1,
+    st.session_state[k("cur")],
+    1,
+    key=k("frame"),
+    disabled=st.session_state[k("playing")]
+)
+# Si está en Pause, el slider controla el frame
+if not st.session_state[k("playing")]:
+    st.session_state[k("cur")] = cur
+cur = st.session_state[k("cur")]
+
+# ------------------------------
+# Simulación (precompute 1 vez por render)
+# ------------------------------
+np.random.seed(42)  # determinista por render; ajusta si quieres "ruido" distinto
 idx = pd.date_range(pd.Timestamp.now().floor("30min") - pd.Timedelta(minutes=30*(periods-1)),
                     periods=periods, freq="30min")
 
-# Mezcla UGM
+# Mezcla UGM (Dirichlet)
 if int(n_ugm) == 3:
     alpha = np.array([2.0, 3.0, 1.6])
 else:
     alpha = np.ones(int(n_ugm)) + 0.5
 mix = np.random.dirichlet(alpha, size=periods)  # (periods, n_ugm)
 
-# Propiedades por UGM (dentro de rangos)
+# Propiedades por UGM (rangos pedidos)
 ugm_props = []
 for j in range(int(n_ugm)):
     ugm_props.append(dict(
@@ -149,19 +179,7 @@ Agua = np.clip(np.maximum(agua_req_kgpt - Refino*0.95 - HumN_blend*10, 0), 0, 40
 Hum_out = np.clip(HumN_blend + 0.095*Refino + 0.10*Agua, 5, 18)
 
 # ------------------------------
-# Estado animación
-# ------------------------------
-if k("i") not in st.session_state:
-    st.session_state[k("i")] = 0
-if k("last_tick") not in st.session_state:
-    st.session_state[k("last_tick")] = 0.0
-
-# Slider de frame (siempre visible)
-st.session_state[k("i")] = st.slider("Frame", 0, periods-1, st.session_state[k("i")], 1, key=k("frame"))
-cur = int(st.session_state[k("i")])
-
-# ------------------------------
-# Figura 1×5
+# Figura 1×5 (slicing por frame)
 # ------------------------------
 fig = make_subplots(
     rows=1, cols=5, shared_xaxes=False,
@@ -213,7 +231,7 @@ for di, (dname, series) in enumerate(feeds.items()):
     )
 fig.update_yaxes(title_text="tph", row=1, col=2, autorange=True)
 
-# (3) P80 / −100# / TR (segundo eje)
+# (3) P80 / −100# / TR
 fig.add_trace(
     go.Scatter(x=idx[:cur+1], y=P80_effmm[:cur+1], name="P80 (mm)", mode="lines",
                line=dict(width=2, color=COL["p80"]), showlegend=True),
@@ -232,7 +250,7 @@ fig.add_trace(
 fig.update_yaxes(title_text="P80 (mm)", row=1, col=3, secondary_y=False, autorange=True)
 fig.update_yaxes(title_text="% / min", row=1, col=3, secondary_y=True, autorange=True)
 
-# (4) Leyes (todas a eje derecho)
+# (4) Leyes (todas al eje derecho)
 fig.add_trace(go.Scatter(x=idx[:cur+1], y=100*CuT_blend[:cur+1], name="CuT %",
                          mode="lines", line=dict(width=1.6, color="#424242"),
                          showlegend=False), row=1, col=4, secondary_y=True)
@@ -248,7 +266,7 @@ fig.add_trace(go.Scatter(x=idx[:cur+1], y=HumN_blend[:cur+1], name="HumNat %",
 fig.update_yaxes(title_text="%", row=1, col=4, secondary_y=True, autorange=True)
 fig.update_yaxes(title_text="Leyes", row=1, col=4, secondary_y=False, showgrid=False)
 
-# (5) Dosificación + Hum_total (segundo eje)
+# (5) Dosificación + Hum_total
 fig.add_trace(go.Scatter(x=idx[:cur+1], y=Acid[:cur+1], name="Ácido (kg/t)",
                          mode="lines", line=dict(width=2, color=COL["acid"])),
               row=1, col=5, secondary_y=False)
@@ -264,7 +282,7 @@ fig.add_trace(go.Scatter(x=idx[:cur+1], y=Hum_out[:cur+1], name="Hum_total %",
 fig.update_yaxes(title_text="kg/t", row=1, col=5, secondary_y=False, autorange=True)
 fig.update_yaxes(title_text="%", row=1, col=5, secondary_y=True, autorange=True)
 
-# Layout general (fondo gris + leyenda visible + márgenes auto)
+# Layout general
 fig.update_layout(
     height=540,
     hovermode="x unified",
@@ -273,16 +291,16 @@ fig.update_layout(
     font=dict(color="#111", size=12),
     legend=dict(
         orientation="h",
-        y=1.10,
+        y=1.06,           # un poco más cerca para evitar recortes
         x=1.0,
         xanchor="right",
         font=dict(size=11),
         tracegroupgap=8
     ),
-    margin=dict(l=30, r=10, t=90, b=30)
+    margin=dict(l=30, r=10, t=80, b=30)
 )
 
-# Rejillas + ejes profesionales (ISA-101)
+# Ejes profesionales (ISA-101)
 for c in range(1, 6):
     fig.update_xaxes(
         showgrid=True, gridcolor="#E1E3E8", zeroline=False,
@@ -302,7 +320,7 @@ for c in range(1, 6):
 st.plotly_chart(fig, use_container_width=True, key=k("plot"))
 
 # ------------------------------
-# KPIs sincronizados (frame actual)
+# KPIs sincronizados
 # ------------------------------
 row = cur
 c_k1, c_k2, c_k3, c_k4, c_k5 = st.columns(5)
@@ -332,19 +350,3 @@ st.latex(
     + {a6:.3f}\,(\mathrm{{CaCO_3}}\cdot \mathrm{{CuS}})
     """
 )
-
-# ------------------------------
-# Autoplay robusto
-# ------------------------------
-# Avanza automáticamente sin interacción cuando Autoplay está activo.
-# Usamos time.time() para espaciar frames y evitar loops bloqueantes.
-now = time.time()
-if autoplay:
-    last = st.session_state[k("last_tick")]
-    if now - last >= (speed_ms / 1000.0):
-        st.session_state[k("last_tick")] = now
-        st.session_state[k("i")] = (cur + 1) % periods
-        st.experimental_rerun()
-else:
-    # al desactivar autoplay, resetea el marcador de tick para iniciar limpio
-    st.session_state[k("last_tick")] = now
